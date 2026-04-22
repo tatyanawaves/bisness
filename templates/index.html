@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finvy B2B Outreach</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --bg-card: rgba(30, 41, 59, 0.7);
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --success: #10b981;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: rgba(255, 255, 255, 0.1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            background-image: radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.15), transparent 25%),
+                              radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.1), transparent 25%);
+            background-attachment: fixed;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container { max-width: 1400px; margin: 0 auto; display: flex; gap: 2rem; align-items: flex-start; }
+        
+        .sidebar {
+            flex: 0 0 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            position: sticky;
+            top: 2rem;
+            max-height: calc(100vh - 4rem);
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+        
+        .sidebar::-webkit-scrollbar { width: 4px; }
+        .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+        .main-content {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        header {
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        h1 {
+            font-size: 1.75rem; font-weight: 700;
+            background: linear-gradient(90deg, #60a5fa, #a78bfa);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        .glass-panel {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            display: flex; flex-direction: column; gap: 0.5rem;
+            margin-bottom: 1.25rem;
+        }
+
+        label { font-size: 0.875rem; font-weight: 500; color: var(--text-muted); }
+
+        input, select {
+            background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border);
+            color: white; padding: 0.75rem 1rem; border-radius: 8px;
+            font-family: inherit; font-size: 1rem; outline: none; transition: border-color 0.2s;
+        }
+        input:focus, select:focus { border-color: var(--primary); }
+
+        button {
+            background: var(--primary); color: white; border: none;
+            padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; font-size: 1rem;
+            cursor: pointer; transition: all 0.2s; display: inline-flex;
+            align-items: center; justify-content: center; gap: 0.5rem; width: 100%;
+        }
+        button:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        button.success { background: var(--success); }
+        button.success:hover { background: #059669; }
+
+        .radio-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .radio-option {
+            display: flex; align-items: center; gap: 0.5rem;
+            background: rgba(15, 23, 42, 0.4); padding: 0.75rem; border-radius: 8px;
+            border: 1px solid var(--border); cursor: pointer; transition: all 0.2s;
+        }
+        .radio-option:hover { border-color: var(--primary); }
+        .radio-option input { margin: 0; cursor: pointer; }
+
+        .danger { background: #ef4444; border: 1px solid rgba(239, 68, 68, 0.5); }
+        .danger:hover { background: #dc2626; }
+
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th, td { padding: 1rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+        th { font-weight: 600; color: var(--text-muted); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: rgba(255, 255, 255, 0.03); }
+
+        .checkbox-cell { width: 40px; text-align: center; }
+        input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary); cursor: pointer; }
+
+        .badge {
+            display: inline-block; padding: 0.25rem 0.5rem; border-radius: 9999px;
+            font-size: 0.75rem; font-weight: 600;
+            background: rgba(59, 130, 246, 0.2); color: #93c5fd;
+        }
+
+        .contact-info { font-size: 0.875rem; color: var(--text-muted); margin-top: 0.5rem; }
+        
+        .pitch-tabs {
+            display: flex; gap: 0.5rem; margin-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border); padding-bottom: 0.5rem;
+        }
+        .pitch-tab {
+            background: transparent; color: var(--text-muted); padding: 0.25rem 0.5rem;
+            border-radius: 4px; font-size: 0.75rem; cursor: pointer; transition: all 0.2s;
+            border: 1px solid transparent; width: auto;
+        }
+        .pitch-tab.active {
+            color: var(--text-main); background: rgba(255,255,255,0.1); border-color: var(--border);
+        }
+        .pitch-tab:hover:not(.active) { color: white; }
+
+        .pitch-preview {
+            max-height: 150px; overflow-y: auto; font-size: 0.875rem; color: #cbd5e1;
+            padding-right: 0.5rem; white-space: pre-wrap; line-height: 1.4;
+        }
+        .pitch-preview::-webkit-scrollbar { width: 4px; }
+        .pitch-preview::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+        .loading { animation: pulse 1.5s infinite; color: #fbd38d; }
+        .status-done { color: #6ee7b7; font-size: 0.875rem; }
+
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        #loader-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(4px);
+            z-index: 100; display: none; justify-content: center; align-items: center;
+            flex-direction: column; gap: 1rem;
+        }
+        .spinner {
+            width: 40px; height: 40px; border: 4px solid var(--border);
+            border-top-color: var(--primary); border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div id="loader-overlay">
+        <div class="spinner"></div>
+        <div id="loader-text">Парсинг данных...</div>
+    </div>
+
+    <div class="container">
+        
+        <!-- SIDEBAR -->
+        <div class="sidebar">
+            <header>
+                <h1>Finvy Outreach</h1>
+                <div id="total-stats" class="badge" style="margin-top: 0.5rem;">Бизнесов: 0</div>
+            </header>
+
+            <div class="glass-panel">
+                <h3 style="margin-bottom: 1rem; font-size: 1rem;">1. Поиск бизнесов</h3>
+                <div class="form-group">
+                    <label>Категория бизнеса</label>
+                    <input type="text" id="parse-category" placeholder="Например: кофейня">
+                </div>
+                <div class="form-group">
+                    <label>Город</label>
+                    <input type="text" id="parse-city" value="Астана">
+                </div>
+                <button id="btn-parse" onclick="parseCompanies()">
+                    🔍 Parsing
+                </button>
+            </div>
+
+            <div class="glass-panel">
+                <h3 style="margin-bottom: 1rem; font-size: 1rem;">2. Генерация Спитчей</h3>
+                <div class="form-group">
+                    <label>Канал связи</label>
+                    <div class="radio-group" id="channel-radios">
+                        <!-- Filled via JS -->
+                    </div>
+                </div>
+                <button id="btn-generate" class="success" onclick="generateSelected()">
+                    ⚡ Сгенерировать
+                </button>
+                <button id="btn-clear" class="danger" onclick="clearSelected()">
+                    🗑 Очистить выбранное
+                </button>
+            </div>
+        </div>
+
+        <!-- MAIN TABLE -->
+        <div class="main-content">
+            <div class="glass-panel" style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="checkbox-cell">
+                                <input type="checkbox" id="check-all" onclick="toggleAll(this)">
+                            </th>
+                            <th style="width: 25%;">Название & Контакты</th>
+                            <th style="width: 20%;">Детали</th>
+                            <th style="width: 55%;">Готовые спитчи</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        <!-- Data injected via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allBusinesses = [];
+        let channelsData = {};
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadScenarios();
+            await loadBusinesses();
+        });
+
+        async function loadScenarios() {
+            try {
+                const res = await fetch('/api/scenarios');
+                const data = await res.json();
+                channelsData = data.channels;
+                
+                const container = document.getElementById('channel-radios');
+                let first = true;
+                for (const [key, val] of Object.entries(data.channels)) {
+                    container.innerHTML += `
+                        <label class="radio-option">
+                            <input type="radio" name="pitch_channel" value="${key}" ${first ? 'checked' : ''}>
+                            ${val.name}
+                        </label>
+                    `;
+                    first = false;
+                }
+            } catch (e) { console.error('Error', e); }
+        }
+
+        async function loadBusinesses() {
+            try {
+                const res = await fetch('/api/businesses');
+                const data = await res.json();
+                allBusinesses = data.businesses || [];
+                renderTable();
+            } catch (e) { console.error('Error', e); }
+        }
+
+        async function parseCompanies() {
+            const cat = document.getElementById('parse-category').value;
+            const city = document.getElementById('parse-city').value;
+            if (!cat) return alert('Введите категорию!');
+
+            showLoader('Сбор инфы и номеров с карт...');
+            try {
+                const res = await fetch('/api/parse', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ category: cat, city: city })
+                });
+                const data = await res.json();
+                if (data.error) alert(data.error);
+                else await loadBusinesses(); 
+            } catch (e) { alert('Ошибка парсинга. Посмотрите консоль сервера.'); } 
+            finally { hideLoader(); }
+        }
+
+        async function generateSelected() {
+            const checkboxes = document.querySelectorAll('.row-check:checked');
+            if (checkboxes.length === 0) return alert('Выберите компании (галочки в таблице)!');
+
+            const channel = document.querySelector('input[name="pitch_channel"]:checked').value;
+            const scenario = 'finvy_main'; // Единственный сценарий теперь
+            
+            document.getElementById('btn-generate').disabled = true;
+
+            for (let cb of checkboxes) {
+                const pId = cb.value;
+                const biz = allBusinesses.find(b => b.place_id === pId || b.name === pId);
+                if (!biz) continue;
+
+                // UI Loading state
+                const statusDiv = document.getElementById(`status-loading-${pId}`);
+                if (statusDiv) statusDiv.innerHTML = `<span class="loading">Генерируется ${channelsData[channel].name}...</span>`;
+
+                try {
+                    const res = await fetch('/api/generate_single', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ business: biz, scenario, channel })
+                    });
+                    const data = await res.json();
+                    Object.assign(biz, data.business);
+                    
+                    // Обновляем всю строку, чтобы табы отрисовались
+                    updateRowHTML(biz);
+
+                } catch(e) {
+                    if (statusDiv) statusDiv.innerHTML = `<span style="color:#ef4444;">Ошибка</span>`;
+                }
+            }
+            document.getElementById('btn-generate').disabled = false;
+        }
+
+        async function clearSelected() {
+            const checkboxes = document.querySelectorAll('.row-check:checked');
+            if (checkboxes.length === 0) return alert('Выберите компании!');
+
+            const channelRadios = document.querySelectorAll('input[name="pitch_channel"]:checked');
+            const channel = channelRadios.length ? channelRadios[0].value : "all"; // Можно добавить опцию "Все"
+
+            document.getElementById('btn-clear').disabled = true;
+
+            for (let cb of checkboxes) {
+                const pId = cb.value;
+                const biz = allBusinesses.find(b => b.place_id === pId || b.name === pId);
+                if (!biz) continue;
+
+                const statusDiv = document.getElementById(`status-loading-${pId}`);
+                if (statusDiv) statusDiv.innerHTML = `<span class="loading">Очистка...</span>`;
+
+                try {
+                    const res = await fetch('/api/clear_pitches', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ business_id: pId, channel: channel })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        for(let k in biz) if(k.startsWith("pitch_") && !data.business[k]) biz[k] = "";
+                        Object.assign(biz, data.business);
+                        updateRowHTML(biz);
+                    }
+                } catch(e) {
+                    if (statusDiv) statusDiv.innerHTML = `<span style="color:#ef4444;">Ошибка очистки</span>`;
+                }
+            }
+            document.getElementById('btn-clear').disabled = false;
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '';
+            document.getElementById('total-stats').innerText = `Бизнесов: ${allBusinesses.length}`;
+
+            // Показываем сначала последние собранные
+            const sorted = [...allBusinesses].reverse();
+
+            sorted.forEach(b => {
+                const row = document.createElement('tr');
+                row.id = `row-${b.place_id || b.name}`;
+                tbody.appendChild(row);
+                updateRowHTML(b);
+            });
+        }
+
+        // Рендер конкретной строки (обновляется после генерации)
+        function updateRowHTML(b) {
+            const id = b.place_id || b.name;
+            const row = document.getElementById(`row-${id}`);
+            if (!row) return;
+
+            const contactInfo = [
+                b.phone ? `📱 ${b.phone}` : '',
+                b.whatsapp ? `💬 WA: ${b.whatsapp}` : '',
+                b.instagram ? `📷 @${b.instagram}` : '',
+                b.emails ? `✉️ ${b.emails}` : ''
+            ].filter(Boolean).join('<br>');
+
+            // Gather all available pitches
+            let availablePitches = [];
+            for (const ch in channelsData) {
+                const key = `pitch_finvy_main_${ch}`;
+                if (b[key]) {
+                    availablePitches.push({ id: ch, name: channelsData[ch].name, text: b[key] });
+                }
+            }
+
+            let pitchHTML = `<div id="status-loading-${id}" style="margin-bottom:0.5rem"></div>`;
+            
+            if (availablePitches.length > 0) {
+                let tabsHTML = availablePitches.map((p, i) => 
+                    `<button class="pitch-tab ${i===0 ? 'active':''}" onclick="switchTab('${id}', '${p.id}')">${p.name}</button>`
+                ).join('');
+                
+                let contentHTML = availablePitches.map((p, i) => 
+                    `<div id="pitch-content-${id}-${p.id}" class="pitch-preview" style="display: ${i===0 ? 'block':'none'}">${p.text}</div>`
+                ).join('');
+
+                pitchHTML += `
+                    <div class="pitch-tabs">${tabsHTML}</div>
+                    ${contentHTML}
+                `;
+            } else {
+                pitchHTML += `<span style="color:var(--text-muted)">Нет сгенерированных спитчей</span>`;
+            }
+
+            row.innerHTML = `
+                <td class="checkbox-cell">
+                    <input type="checkbox" class="row-check" value="${id}">
+                </td>
+                <td>
+                    <strong>${b.name}</strong><br>
+                    <div class="contact-info">${contactInfo || 'Нет контактных данных'}</div>
+                </td>
+                <td>
+                    <span class="badge">${b.rating || '?'} ★</span><br>
+                    <small style="color:var(--text-muted); display:block; margin-top:0.25rem;">${b.address?.substring(0, 35)}...</small>
+                    <small style="color:var(--text-muted); display:block; margin-top:0.25rem;">${b.types?.substring(0, 30)}</small>
+                </td>
+                <td>
+                    ${pitchHTML}
+                </td>
+            `;
+        }
+
+        // JS Logic for Tabs inside table
+        window.switchTab = function(rowId, pitchId) {
+            const row = document.getElementById(`row-${rowId}`);
+            if (!row) return;
+            
+            // Скрыть все контенты
+            const contents = row.querySelectorAll('[id^="pitch-content-' + rowId + '"]');
+            contents.forEach(c => c.style.display = 'none');
+            
+            // Убрать active у всех табов
+            const tabs = row.querySelectorAll('.pitch-tab');
+            tabs.forEach(t => t.classList.remove('active'));
+
+            // Показать нужный
+            const targetContent = document.getElementById(`pitch-content-${rowId}-${pitchId}`);
+            if (targetContent) targetContent.style.display = 'block';
+
+            // Найти кликнутый таб и сделать active
+            event.target.classList.add('active');
+        }
+
+        function toggleAll(source) {
+            const checkboxes = document.querySelectorAll('.row-check');
+            checkboxes.forEach(cb => cb.checked = source.checked);
+        }
+
+        function showLoader(text) {
+            document.getElementById('loader-text').innerText = text;
+            document.getElementById('loader-overlay').style.display = 'flex';
+        }
+        function hideLoader() {
+            document.getElementById('loader-overlay').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
