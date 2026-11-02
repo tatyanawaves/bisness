@@ -1,0 +1,5 @@
+.env
+data/
+__pycache__/
+# В корневом .gitignore стоит *.html, а исключение там только для корневого templates/
+!templates/index.html
