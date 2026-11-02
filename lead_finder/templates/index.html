@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Поиск клиентов</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Literata:opsz,wght@7..72,400;7..72,500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header class="topbar">
+        <h1>Поиск клиентов</h1>
+        <nav class="tabs" aria-label="Разделы">
+            <button type="button" class="tab" data-view="search" aria-current="page">Поиск</button>
+            <button type="button" class="tab" data-view="library">Скрипты и анализы</button>
+            <button type="button" class="tab" data-view="worked">Отработанные</button>
+        </nav>
+        <p class="keys" id="keys" aria-live="polite"></p>
+    </header>
+
+    <div class="notice" id="setup-notice" hidden></div>
+
+    <main>
+        <section class="view search-view" data-panel="search">
+            <form class="filters" id="search-form" novalidate>
+                <label class="field">
+                    <span>Город</span>
+                    <select name="city" id="city" required></select>
+                </label>
+
+                <label class="field">
+                    <span>Что хотите продать</span>
+                    <input name="offer" id="offer" type="text" placeholder="Например: упаковка и плёнка" autocomplete="off">
+                </label>
+
+                <label class="field">
+                    <span>Ваша компания: описание или ссылка на сайт</span>
+                    <textarea name="company" id="company" rows="3" placeholder="Коротко, чем занимаетесь, или адрес сайта"></textarea>
+                </label>
+
+                <div class="profile-card" id="profile-card" hidden></div>
+
+                <fieldset class="field">
+                    <legend>Чем занимаются клиенты</legend>
+                    <div class="chips" id="activities"></div>
+                    <input name="activity_text" id="activity-text" type="text" placeholder="Другое, через запятую" autocomplete="off">
+                </fieldset>
+
+                <fieldset class="field">
+                    <legend>Размер бизнеса</legend>
+                    <div class="chips" id="sizes"></div>
+                </fieldset>
+
+                <label class="check">
+                    <input type="checkbox" id="only-regular" checked>
+                    <span>Только те, кто закупает регулярно</span>
+                </label>
+
+                <div class="row">
+                    <label class="field count">
+                        <span>Сколько найти</span>
+                        <input name="count" id="count" type="number" min="1" max="100" value="20" inputmode="numeric">
+                    </label>
+                    <label class="field">
+                        <span>Ваше имя для скрипта</span>
+                        <input name="manager" id="manager" type="text" autocomplete="given-name">
+                    </label>
+                </div>
+
+                <button class="primary" type="submit" id="search-button">Найти компании</button>
+                <p class="form-error" id="form-error" role="alert" hidden></p>
+            </form>
+
+            <section class="results" aria-label="Найденные компании">
+                <div class="progress" id="progress" role="status" hidden></div>
+                <div class="warnings" id="warnings"></div>
+                <div class="summary" id="summary"></div>
+                <ol class="company-list" id="company-list"></ol>
+                <div class="empty" id="empty">
+                    <h2>Выберите город и напишите, что продаёте</h2>
+                    <p>Найдём компании, которые закупают такое регулярно, и подготовим скрипт для каждого звонка.</p>
+                </div>
+            </section>
+        </section>
+
+        <section class="view" data-panel="library" hidden>
+            <h2 class="view-title">Сохранённые скрипты</h2>
+            <ol class="plain-list" id="script-list"></ol>
+            <h2 class="view-title">Сохранённые анализы</h2>
+            <ol class="plain-list" id="analysis-list"></ol>
+        </section>
+
+        <section class="view" data-panel="worked" hidden>
+            <h2 class="view-title">Отработанные компании</h2>
+            <p class="view-hint">Они больше не появляются в поиске своего города.</p>
+            <ol class="plain-list" id="worked-list"></ol>
+        </section>
+    </main>
+
+    <aside class="script-panel" id="script-panel" aria-label="Скрипт звонка" hidden tabindex="-1">
+        <div class="script-head" id="script-head"></div>
+        <div class="script-body">
+            <nav class="ladder" id="ladder" aria-label="Шаги разговора"></nav>
+            <div class="script-text" id="script-text"></div>
+        </div>
+        <div class="objections" id="objections">
+            <div class="objection-answer" id="objection-answer" hidden></div>
+            <p class="objection-label" id="objection-label">Если собеседник говорит:</p>
+            <div class="objection-buttons" id="objection-buttons" role="group" aria-labelledby="objection-label"></div>
+        </div>
+    </aside>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
