@@ -13,3 +13,6 @@ deploy/
 !templates/index.html
 .idea/
 .vscode/
+
+# trader-skill working data (portfolio, config with SEC contact email)
+trader/
