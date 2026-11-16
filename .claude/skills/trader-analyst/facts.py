@@ -31,7 +31,7 @@ How the quarters are built:
     RevenuesNetOfInterestExpense, SalesRevenueNet and a few more. Banks and
     insurers report revenue differently; margins for them can be blank.
 
---metrics FILE merges one row per ticker into a JSON file the screener reads
+--metrics FILE merges one row per ticker into a JSON file (for notes or a sheet)
 (TTM revenue and EPS, margins, growth). Offline: --offline DIR reads
 company_tickers.json, companyfacts-CIK##########.json,
 submissions-CIK##########.json and <accession>/index.json from DIR.
