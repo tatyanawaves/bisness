@@ -195,7 +195,7 @@ def run_risk(orders, held, prices, cfg, cash):
                          "detail": {s: {"fetched": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")}
                                     for s in prices}})
     save("config.json", cfg)
-    r = subprocess.run([sys.executable, CHECK, "--json", "--orders", P("orders.json"), "--config", P("config.json"),
+    r = subprocess.run([sys.executable, CHECK, "--json", "--out", P("risk.json"), "--orders", P("orders.json"), "--config", P("config.json"),
                         "--portfolio", P("portfolio.json"), "--prices", P("prices.json"),
                         "--state", P("broker.json")], capture_output=True, text=True, cwd=ROOT)
     try:
