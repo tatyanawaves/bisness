@@ -28,6 +28,8 @@ Quotes (free, delayed, for alerts only, never for placing orders):
           JSON, one request per ticker; the default)
   stooq   https://stooq.com/q/l/?s=aapl.us&f=sd2t2ohlcv&h&e=csv (Stooq's free
           CSV; it answered 404 on 2026-10-13, kept for when it is back)
+  alpaca  https://data.alpaca.markets/v2/stocks/AAPL/snapshot?feed=iex (needs
+          Alpaca keys: ALPACA_API_KEY / ALPACA_SECRET_KEY, or a proxy that adds them)
   --offline DIR reads DIR/<source>-<TICKER>.json|csv instead of the network.
 
 NYSE calendar: the 2026 and 2027 holidays and 1:00 p.m. early closes as
@@ -233,8 +235,44 @@ def parse_yahoo(text, sym):
             "currency": m.get("currency"), "source": "yahoo"}
 
 
-def fetch(url, timeout=20):
-    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
+ALPACA_DATA = "https://data.alpaca.markets"
+
+
+def alpaca_url(sym):
+    feed = os.environ.get("ALPACA_DATA_FEED", "iex")
+    return "%s/v2/stocks/%s/snapshot?feed=%s" % (ALPACA_DATA, sym.upper().replace("-", "."), feed)
+
+
+def alpaca_headers():
+    """Keys come from ALPACA_API_KEY / ALPACA_SECRET_KEY. When they are unset the
+    placeholders are sent and a network proxy that holds the keys swaps them in."""
+    return {"APCA-API-KEY-ID": os.environ.get("ALPACA_API_KEY") or "set-by-proxy",
+            "APCA-API-SECRET-KEY": os.environ.get("ALPACA_SECRET_KEY") or "set-by-proxy"}
+
+
+def parse_alpaca(text, sym):
+    """Alpaca market-data snapshot -> quote."""
+    try:
+        d = json.loads(text)
+    except ValueError:
+        raise AlertError("Alpaca returned something unexpected for %s" % sym)
+    if not isinstance(d, dict) or ("message" in d and "latestTrade" not in d):
+        raise AlertError("Alpaca: %s" % (d.get("message") if isinstance(d, dict) else "bad reply"))
+    trade = d.get("latestTrade") or {}
+    bar = d.get("dailyBar") or {}
+    prev = d.get("prevDailyBar") or {}
+    price = trade.get("p") if trade.get("p") is not None else bar.get("c")
+    if price is None:
+        raise AlertError("Alpaca has no price for %s (check the ticker)" % sym)
+    return {"symbol": sym.upper(), "price": float(price), "open": bar.get("o"), "high": bar.get("h"),
+            "low": bar.get("l"), "prev_close": prev.get("c"), "time": trade.get("t") or bar.get("t") or "",
+            "source": "alpaca"}
+
+
+def fetch(url, timeout=20, headers=None):
+    h = {"User-Agent": UA, "Accept": "*/*"}
+    h.update(headers or {})
+    req = urllib.request.Request(url, headers=h)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.read().decode("utf-8", "replace")
@@ -260,8 +298,12 @@ def get_quotes(symbols, source="yahoo", offline=None, pause=PAUSE):
             else:
                 if i and pause:
                     time.sleep(pause)
-                text = fetch(stooq_url(sym) if source == "stooq" else yahoo_url(sym))
-            quotes[sym] = parse_stooq(text, sym) if source == "stooq" else parse_yahoo(text, sym)
+                if source == "alpaca":
+                    text = fetch(alpaca_url(sym), headers=alpaca_headers())
+                else:
+                    text = fetch(stooq_url(sym) if source == "stooq" else yahoo_url(sym))
+            parse = {"stooq": parse_stooq, "alpaca": parse_alpaca}.get(source, parse_yahoo)
+            quotes[sym] = parse(text, sym)
         except AlertError as e:
             errors.append(str(e))
     return quotes, errors
@@ -539,7 +581,7 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd")
 
     def net(p):
-        p.add_argument("--source", default="yahoo", choices=["yahoo", "stooq"])
+        p.add_argument("--source", default="yahoo", choices=["yahoo", "stooq", "alpaca"])
         p.add_argument("--offline", metavar="DIR", help="read <source>-<TICKER>.json|csv files, no network")
         p.add_argument("--now", help="pretend it is this time (ISO; no offset = New York time)")
         p.add_argument("--json", action="store_true")
