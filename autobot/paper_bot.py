@@ -141,45 +141,60 @@ def signals(top_n):
 
 
 # ---------------------------------------------------------------- portfolio
-def rebuild_state(budget):
-    """Everything the bot needs, rebuilt from its own Alpaca orders (client_order_id 'autobot-...').
-    A cloud run starts from an empty disk, so nothing is kept locally between runs."""
+def my_orders(prefix):
+    """Every order this bot sent (client_order_id starts with prefix), bracket legs included."""
     orders, after = [], "2026-01-01T00:00:00Z"
     while True:
         page = api("GET", PAPER, "/v2/orders", params={"status": "all", "limit": 500, "direction": "asc",
-                                                         "after": after})
-        mine = [o for o in page if (o.get("client_order_id") or "").startswith("autobot-")]
-        orders += mine
+                                                         "after": after, "nested": "true"})
+        for o in page:
+            if (o.get("client_order_id") or "").startswith(prefix):
+                orders.append(o)
+                for leg in o.get("legs") or []:
+                    leg = dict(leg, client_order_id=o["client_order_id"] + "-leg")
+                    orders.append(leg)
         if len(page) < 500:
             break
         after = page[-1]["submitted_at"]
-    cash, symbols, months, today = float(budget), set(), set(), []
+    return orders
+
+
+def rebuild_state(budget, prefix="autobot-"):
+    """Everything the bot needs, rebuilt from its own Alpaca orders. A cloud run starts from an
+    empty disk, so nothing is kept locally between runs. Holdings are the NET quantity the bot
+    itself bought and sold, so other strategies on the same account never mix in."""
+    orders = my_orders(prefix)
+    cash, qty, months, today = float(budget), {}, set(), []
     for o in orders:
         months.add(o["client_order_id"].split("-")[1])
-        if o["submitted_at"][:10] == dt.date.today().isoformat():
+        if o["submitted_at"][:10] == dt.date.today().isoformat() and not o["client_order_id"].endswith("-leg"):
             today.append({"date": o["submitted_at"][:10], "symbol": o["symbol"], "side": o["side"],
                           "status": "placed", "broker_id": o["id"]})
-        if o["status"] not in ("filled", "partially_filled") or not o.get("filled_avg_price"):
+        if not o.get("filled_avg_price") or float(o.get("filled_qty") or 0) == 0:
             continue
-        v = float(o["filled_qty"]) * float(o["filled_avg_price"])
-        if o["side"] == "buy":
-            cash -= v
-            symbols.add(o["symbol"])
-        else:
-            cash += v
+        q, px = float(o["filled_qty"]), float(o["filled_avg_price"])
+        sign = 1 if o["side"] == "buy" else -1
+        cash -= sign * q * px
+        qty[o["symbol"]] = qty.get(o["symbol"], 0) + sign * q
+    qty = {k: round(v, 9) for k, v in qty.items() if abs(v) > 1e-9}
     save("broker.json", {"entries": today})
-    return {"cash": cash, "symbols": sorted(symbols), "months": sorted(months), "orders": len(orders)}
+    return {"cash": cash, "qty": qty, "symbols": sorted(qty), "months": sorted(months),
+            "orders": orders}
+
+
+def last_prices(symbols):
+    if not symbols:
+        return {}
+    d = api("GET", DATA, "/v2/stocks/trades/latest", params={"symbols": ",".join(symbols), "feed": "iex"})
+    return {s: float(t["p"]) for s, t in (d.get("trades") or {}).items()}
 
 
 def bot_book(state, positions):
-    """The bot's holdings = Alpaca positions in symbols the bot bought (exact broker qty)."""
-    held = {}
-    for p in positions:
-        s = p["symbol"]
-        if s in state["symbols"]:
-            held[s] = {"qty": float(p["qty"]), "price": float(p["current_price"]),
-                       "value": float(p["market_value"])}
-    return held
+    """The bot's holdings: its own net quantity, valued at the broker's current price."""
+    px = {p["symbol"]: float(p["current_price"]) for p in positions}
+    missing = [s for s in state["qty"] if s not in px]
+    px.update(last_prices(missing))
+    return {s: {"qty": q, "price": px[s], "value": q * px[s]} for s, q in state["qty"].items()}
 
 
 def equity(state, held):
@@ -221,11 +236,13 @@ def record(state, order, o):
     if o["status"] != "filled":
         return
     qty, px = float(o["filled_qty"]), float(o["filled_avg_price"])
-    if order["side"] == "buy":
-        state["cash"] -= qty * px
-        state["symbols"] = sorted(set(state["symbols"]) | {order["symbol"]})
+    sign = 1 if order["side"] == "buy" else -1
+    state["cash"] -= sign * qty * px
+    q = round(state["qty"].get(order["symbol"], 0) + sign * qty, 9)
+    if abs(q) > 1e-9:
+        state["qty"][order["symbol"]] = q
     else:
-        state["cash"] += qty * px
+        state["qty"].pop(order["symbol"], None)
     broker = load("broker.json", {"entries": []})
     broker.setdefault("entries", []).append({"date": dt.date.today().isoformat(), "symbol": order["symbol"],
                                              "side": order["side"], "status": "placed", "broker_id": o["id"]})
