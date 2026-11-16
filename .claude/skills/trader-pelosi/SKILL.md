@@ -93,7 +93,7 @@ is not installed, open the saved PDF and read it directly: you can read PDFs.
 `parse` turns `pdftotext -layout` text into rows. Check the row count against
 the PDF when a report runs over several pages.
 
-## Example: the reel's alert
+## Example: a real alert
 
 ```
 NEW Periodic Transaction Report: Hon. Nancy Pelosi (CA11) filed 2026-08-21, doc 20035143
@@ -109,8 +109,10 @@ private real estate LLC with no ticker. Her other 2026 PTRs: 20033725
 estate LLC). Then: "This is a public disclosure filed 28 days after the trade.
 It says what Paul Pelosi bought in July, not what anyone will buy next."
 
-If the user wants to act on it, it goes the long way: shares only (the config
-has `allow_options: false`), sized by `/trader-budget`, checked by
+If the user wants to act on it, it goes the long way: a disclosure is weeks
+old, so it is a reason to look at a chart, not a setup. `/trader-scanner`
+and `/trader-entry` decide if there is a trade today; then shares only (the
+config has `allow_options: false`), sized by `/trader-budget`, checked by
 `/trader-risk`, placed by `/trader-broker` only after their yes.
 
 ## The Senate: the manual route

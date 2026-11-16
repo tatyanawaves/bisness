@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 """News monitor for trader-news. Standard library only.
 
-Watches headlines and SEC filings for the stocks you hold (or plan to copy)
-and prints only what is new since the last check, newest first, with a flag
-on anything that touches your positions.
+Watches headlines and SEC filings for the stocks you watch or hold and
+prints only what is new since the last check, newest first, with how far each
+stock has moved today and a flag on anything that touches your tickers.
 
-    python3 news.py                                  # tickers from trader/portfolio.json or targets.json
-    python3 news.py --tickers AAPL AXP GOOGL KO BAC
-    python3 news.py --tickers AAPL --all --hours 72  # everything in the last 3 days, seen or not
+    python3 news.py                                  # watchlist + plan + portfolio tickers
+    python3 news.py --tickers TSLA NVDA AMD
+    python3 news.py --tickers TSLA --all --hours 72  # everything in the last 3 days, seen or not
     python3 news.py --no-sec                         # headlines only
+    python3 news.py --no-moves                       # skip the price line per ticker
+
+Your tickers, when --tickers is not given: every hit in trader/watchlist.json
+(trader-scanner), the symbol in trader/plan.json (trader-exit) and the
+positions in trader/portfolio.json.
 
 Sources, one request each per ticker:
   - Yahoo Finance headline RSS:
@@ -20,9 +25,14 @@ Sources, one request each per ticker:
     trader/config.json or SEC_USER_AGENT). Without one the SEC part is skipped
     and the tool says so; headlines still run.
 
-State: trader/state/news.json remembers what you have seen (30 days), so an
-item shows once. Offline: --offline DIR reads yahoo-<TICKER>.xml,
-sec-<FORM>-<CIK>.xml and company_tickers.json from DIR. The tests use it.
+  - The move: Yahoo Finance's chart endpoint (unofficial, can lag), the last
+    price against yesterday's close:
+    https://query2.finance.yahoo.com/v8/finance/chart/<TICKER>?range=1d&interval=5m
+
+Times print in New York time (ET). State: trader/state/news.json remembers
+what you have seen (30 days), so an item shows once. Offline: --offline DIR
+reads yahoo-<TICKER>.xml, chart-<TICKER>.json, sec-<FORM>-<CIK>.xml and
+company_tickers.json from DIR. The tests use it.
 
 Headlines are leads, not facts: open the story before acting, and treat
 nothing here as advice.
@@ -43,12 +53,14 @@ import urllib.request
 import xml.etree.ElementTree as ET
 
 YAHOO = "https://feeds.finance.yahoo.com/rss/2.0/headline?s=%s&region=US&lang=en-US"
+CHART = "https://%s.finance.yahoo.com/v8/finance/chart/%s?range=1d&interval=5m"
 SEC_FEED = ("https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=%s&type=%s"
             "&dateb=&owner=include&count=%d&output=atom")
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 PLACEHOLDER = "you@example.com"
-BROWSER_UA = "Mozilla/5.0 (compatible; trader-skill/1.0; +https://github.com/Jakeschincariol/trader-skill)"
+BROWSER_UA = "Mozilla/5.0 (compatible; day-trader-skill/2.0; +https://github.com/Jakeschincariol/day-trader-skill)"
 KEEP_DAYS = 30
+MOVE_PCT = 3.0  # a stock this far from yesterday's close is flagged as moving
 
 ITEMS_8K = {
     "1.01": "material agreement", "1.02": "agreement ended", "1.03": "bankruptcy",
@@ -70,11 +82,38 @@ KEYWORDS = [
     ("capital", r"\bdividend\b|\bbuyback\b|\brepurchase\b|\bstock split\b|\boffering\b"),
     ("people", r"\bCEO\b|\bCFO\b|\bresign|\bsteps down\b|\bappoint"),
     ("risk", r"\brecall\b|\bbankrupt|\bdefault\b|\bdelist|\bhack|\bbreach\b|\boutage\b"),
+    ("halt", r"\bhalt(?:s|ed)?\b|\btrading (?:pause|suspen)"),
+    ("regulatory", r"\bFDA\b|\bapproval\b|\bapproves\b|\bclinical\b|\bFTC\b|\bDOJ\b"),
+    ("macro", r"\bFed\b|\bFOMC\b|\bCPI\b|\binflation\b|\bjobs report\b|\bpayrolls\b|\btariffs?\b|\bfutures\b"),
 ]
 
 
 class NewsError(Exception):
     pass
+
+
+# ---------------------------------------------------------------- time
+
+def _nth_sunday(year, month, n):
+    d = _dt.date(year, month, 1)
+    d += _dt.timedelta(days=(6 - d.weekday()) % 7)
+    return d + _dt.timedelta(weeks=n - 1)
+
+
+def eastern_offset(utc):
+    """Hours from UTC for New York: -4 in daylight time, -5 otherwise (US rule since 2007)."""
+    y = utc.year
+    start = _dt.datetime.combine(_nth_sunday(y, 3, 2), _dt.time(7, 0))   # 2:00 EST
+    end = _dt.datetime.combine(_nth_sunday(y, 11, 1), _dt.time(6, 0))    # 2:00 EDT
+    naive = utc.replace(tzinfo=None)
+    return -4 if start <= naive < end else -5
+
+
+def to_eastern(utc):
+    """Aware or naive UTC -> naive New York wall-clock time."""
+    if utc.tzinfo is not None:
+        utc = utc.astimezone(_dt.timezone.utc)
+    return utc.replace(tzinfo=None) + _dt.timedelta(hours=eastern_offset(utc))
 
 
 # ---------------------------------------------------------------- inputs
@@ -86,18 +125,23 @@ def load_json(path):
     return None
 
 
-def watch_from_files(portfolio="trader/portfolio.json", targets="trader/targets.json"):
-    """{ticker: name or None} from your holdings, else from your targets."""
+def watch_from_files(portfolio="trader/portfolio.json", watchlist="trader/watchlist.json",
+                     plan="trader/plan.json"):
+    """{ticker: name or None}: the scanner's hits, the planned trade and your holdings."""
     out = {}
+    wl = load_json(watchlist) or {}
+    for h in wl.get("hits", []):
+        sym = h.get("symbol") or h.get("ticker")
+        if sym:
+            out[sym.upper()] = h.get("name")
+    pl = load_json(plan) or {}
+    if pl.get("symbol"):
+        out.setdefault(pl["symbol"].upper(), pl.get("name"))
     pf = load_json(portfolio) or {}
     for p in pf.get("positions", []):
-        if p.get("ticker"):
-            out[p["ticker"].upper()] = p.get("name")
-    if not out:
-        tg = load_json(targets) or {}
-        for w in tg.get("weights", []):
-            if w.get("ticker"):
-                out[w["ticker"].upper()] = w.get("name")
+        sym = p.get("ticker") or p.get("symbol")
+        if sym:
+            out[sym.upper()] = p.get("name") or out.get(sym.upper())
     return out
 
 
@@ -244,6 +288,42 @@ def parse_sec_atom(data, ticker):
     return out
 
 
+def parse_chart(data, ticker):
+    """Yahoo chart JSON -> {"ticker", "price", "prev_close", "pct", "time"} or raise."""
+    try:
+        doc = json.loads(data.decode("utf-8") if isinstance(data, bytes) else data)
+        meta = doc["chart"]["result"][0]["meta"]
+    except (ValueError, KeyError, IndexError, TypeError):
+        raise NewsError("chart for %s is not usable" % ticker)
+    price = meta.get("regularMarketPrice")
+    prev = meta.get("chartPreviousClose") or meta.get("previousClose")
+    if not price or not prev:
+        raise NewsError("chart for %s has no price" % ticker)
+    when = meta.get("regularMarketTime")
+    return {"ticker": ticker, "price": round(float(price), 2), "prev_close": round(float(prev), 2),
+            "pct": round((float(price) / float(prev) - 1) * 100, 2),
+            "time": _dt.datetime.fromtimestamp(when, _dt.timezone.utc) if when else None}
+
+
+def collect_moves(fetcher, watch, errors=None):
+    errors = [] if errors is None else errors
+    out = []
+    for t in sorted(watch):
+        name = "chart-%s.json" % t
+        try:
+            try:
+                data = fetcher.get(CHART % ("query2", yahoo_symbol(t)), name)
+            except NewsError as exc:
+                if fetcher.offline or not re.search(r"HTTP (429|5\d\d)", str(exc)):
+                    raise
+                data = fetcher.get(CHART % ("query1", yahoo_symbol(t)), name)
+            out.append(parse_chart(data, t))
+        except NewsError as exc:
+            if not (fetcher.offline and "no file" in str(exc)):
+                errors.append("price for %s: %s" % (t, exc))
+    return out
+
+
 def mention_patterns(watch):
     pats = {}
     for t, name in watch.items():
@@ -332,9 +412,10 @@ def select(items, state, now, hours=48, show_all=False):
     """Items within the window; only unseen ones unless show_all."""
     seen = state.setdefault("seen", {})
     cutoff = now - _dt.timedelta(hours=hours)
+    ahead = now + _dt.timedelta(minutes=10)  # a pinned --now: nothing from after it
     out = []
     for it in items:
-        if it["time"] is not None and it["time"] < cutoff:
+        if it["time"] is not None and (it["time"] < cutoff or it["time"] > ahead):
             continue
         fp = fingerprint(it)
         it["new"] = fp not in seen
@@ -354,12 +435,25 @@ def remember(items, state, now):
     state["last_check"] = stamp
 
 
-def render(items, errors, now):
+def render_moves(moves, move_pct=MOVE_PCT):
     out = []
+    for m in moves:
+        flag = "MOVING" if abs(m["pct"]) >= move_pct else ""
+        when = (" at %s ET" % to_eastern(m["time"]).strftime("%H:%M")) if m.get("time") else ""
+        out.append("%-6s %s %+.2f%% vs yesterday's close %s%s  %s" % (
+            m["ticker"], "{:,.2f}".format(m["price"]), m["pct"], "{:,.2f}".format(m["prev_close"]),
+            when, flag))
+    return out
+
+
+def render(items, errors, now, moves=None, move_pct=MOVE_PCT):
+    out = render_moves(moves or [], move_pct)
+    if out:
+        out.append("")
     if not items:
         out.append("Nothing new.")
     for it in items:
-        when = it["time"].strftime("%Y-%m-%d %H:%M UTC") if it["time"] else "time unknown"
+        when = to_eastern(it["time"]).strftime("%Y-%m-%d %H:%M ET") if it["time"] else "time unknown"
         mark = "!" if it.get("important") else " "
         who = ",".join(it["touches"]) or it["ticker"]
         out.append("%s %s  %-11s %-13s %s" % (mark, when, who, it["source"], it["title"]))
@@ -371,7 +465,7 @@ def render(items, errors, now):
     for e in errors:
         out.append("note: %s" % e)
     out.append("Checked %s. Headlines are leads, not facts; open the story before acting. "
-               "Not financial advice." % now.strftime("%Y-%m-%d %H:%M UTC"))
+               "Not financial advice." % to_eastern(now).strftime("%Y-%m-%d %H:%M ET"))
     return "\n".join(out) + "\n"
 
 
@@ -386,14 +480,17 @@ def _json_ready(items):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--tickers", nargs="*", help="default: trader/portfolio.json, else targets.json")
+    ap.add_argument("--tickers", nargs="*", help="default: watchlist + plan + portfolio")
     ap.add_argument("--portfolio", default="trader/portfolio.json")
-    ap.add_argument("--targets", default="trader/targets.json")
+    ap.add_argument("--watchlist", default="trader/watchlist.json")
+    ap.add_argument("--plan", default="trader/plan.json")
     ap.add_argument("--state", default="trader/state/news.json")
     ap.add_argument("--hours", type=float, default=48, help="ignore items older than this")
     ap.add_argument("--all", action="store_true", help="show seen items too")
     ap.add_argument("--forms", default="8-K", help="SEC forms to watch, comma separated")
     ap.add_argument("--no-sec", action="store_true", help="headlines only")
+    ap.add_argument("--no-moves", action="store_true", help="skip the price line per ticker")
+    ap.add_argument("--move-pct", type=float, default=MOVE_PCT, help="flag a move this big (percent)")
     ap.add_argument("--user-agent", help="SEC User-Agent: \"Your Name you@example.com\"")
     ap.add_argument("--config", default="trader/config.json")
     ap.add_argument("--offline", metavar="DIR")
@@ -404,13 +501,13 @@ def main(argv=None):
 
     if args.tickers:
         watch = {t.upper(): None for t in args.tickers}
-        known = watch_from_files(args.portfolio, args.targets)
+        known = watch_from_files(args.portfolio, args.watchlist, args.plan)
         watch.update({t: known[t] for t in watch if known.get(t)})
     else:
-        watch = watch_from_files(args.portfolio, args.targets)
+        watch = watch_from_files(args.portfolio, args.watchlist, args.plan)
     if not watch:
-        print("news: no tickers. Pass --tickers, or create trader/portfolio.json or "
-              "trader/targets.json first (/trader-copycat writes targets).", file=sys.stderr)
+        print("news: no tickers. Pass --tickers, or run /trader-scanner first (it writes "
+              "trader/watchlist.json).", file=sys.stderr)
         return 2
     now = parse_time(args.now) if args.now else _dt.datetime.now(_dt.timezone.utc)
     state = load_json(args.state) or {}
@@ -426,11 +523,14 @@ def main(argv=None):
     items = collect(fetcher, watch, state, sec=sec, forms=forms, errors=errors)
     items = dedupe(tag(items, watch))
     shown = select(items, state, now, hours=args.hours, show_all=args.all)
+    moves = [] if args.no_moves else collect_moves(fetcher, watch, errors)
     if args.json:
-        print(json.dumps({"checked": now.isoformat(), "items": _json_ready(shown),
+        mv = [dict(m, time=m["time"].isoformat() if m.get("time") else None,
+                   moving=abs(m["pct"]) >= args.move_pct) for m in moves]
+        print(json.dumps({"checked": now.isoformat(), "moves": mv, "items": _json_ready(shown),
                           "notes": errors}, indent=2))
     else:
-        sys.stdout.write(render(shown, errors, now))
+        sys.stdout.write(render(shown, errors, now, moves, args.move_pct))
     if not args.dry_run:
         remember(items, state, now)
         folder = os.path.dirname(args.state)
